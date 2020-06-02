@@ -1,0 +1,92 @@
+---
+title: "HMM-based Futures Price Forecasts"
+author: "Chris D"
+date: "5/29/2020"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+# Introduction
+> Because my R studio version cannot complie Chinese character, I can only comment by using English. 
+
+## Packages Preparation
+
+- `depmixS4`: a good package for HMM model, but not as good as packages in python, API is very hard to read : https://cran.r-project.org/web/packages/depmixS4/depmixS4.pdf 
+
+- `readxl`: a common package to read excel files
+
+```{r warning=FALSE, echo = T, results = 'hide', message=FALSE}
+library(depmixS4)
+library(readxl)
+```
+
+
+## Load and Clean Data  
+
+- Clean our data, I divide the file you sent to me into individual file with one specific future index
+
+```{r setup, include=FALSE}
+corn_data <- read_excel("corn_data.xls")
+rubber_data <- read_excel("rubber_data.xls")
+sugar_data <- read_excel("sugar_data.xls")
+
+dataClean <- function(inputData){
+  inputData <- inputData[, 3:ncol(inputData)]
+  names(inputData) <- c('date', 'open', 'close', 'high', 'low')
+  inputData <- data.frame(inputData)
+  
+  # need to specify date column
+  inputData$date <-as.Date(inputData$date, "%Y-%m-%d")
+  
+  # omit NA rows in each dataset
+  outputData <- na.omit(inputData)
+  return(outputData)
+}
+
+corn_data <- dataClean(corn_data)
+rubber_data <- dataClean(rubber_data)
+sugar_data <- dataClean(sugar_data)
+```
+
+## Construct Model (take cornData as an example)
+
+Outcome of 
+```{r}
+## Construct and fit a 4-state model
+mod <- depmix(list(open ~ 1, close ~ 1, high ~ 1, low ~ 1), data=corn_data, nstates=4, family=list(gaussian(), gaussian(), gaussian(), gaussian()))
+
+set.seed(1)
+fm2 <- fit(mod, em = em.control(maxit = 1000),verbose = FALSE)
+
+summary(fm2)
+print(fm2)
+
+probs <- posterior(fm2)             # Compute probability of being in each state
+head(probs)
+
+```
+
+## Function Definition and Explanation
+
+- Define a `fitHMM` function to fit assigned dataset and number of hiddenState
+
+```{r}
+fitHMM <- function(dataset, hiddenState){
+  for (i in 2:hiddenState){
+    set.seed(1)
+    cat("Outcome of ", deparse(substitute(dataset)), "\n")
+    fmx <- fit(depmix(list(open ~ 1, close ~ 1, high ~ 1, low ~ 1), data = dataset, nstates = i,
+                      family=list(gaussian(), gaussian(), gaussian(), gaussian())))
+    
+    summary(fmx)
+    print(fmx)
+    poster <- posterior(fmx)
+  }
+}
+
+fitHMM(sugar_data, 4)
+
+```
+
+
